@@ -1,63 +1,49 @@
+import os
 import requests
-from os import getenv
-from fastapi import HTTPException
 import aiohttp
+from fastapi import HTTPException
 
-from dotenv import load_dotenv
-load_dotenv()
-
-ALPHAVANTAGE_API_KEY = getenv("ALPHAVANTAGE_API_KEY")
+API_KEY = os.getenv('API_KEY')
 
 def sync_converter(from_currency: str, to_currency: str, price: float):
-    url = (
-        f'https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency={from_currency}&to_currency={to_currency}&apikey={ALPHAVANTAGE_API_KEY}'
-    )
-
+    
+    url = f'https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency={from_currency}&to_currency={to_currency}&apikey={API_KEY}'
+    
     try:
         response = requests.get(url=url)
-        response.raise_for_status()
     except Exception as error:
-        raise HTTPException(status_code=400, detail=f"Erro ao fazer requisição: {error}")
+        raise HTTPException(status_code=500, detail=f'Internal error on alpha vantange requests: {error}')
     
     data = response.json()
-
+    
     if "Realtime Currency Exchange Rate" not in data:
-        raise HTTPException(status_code=400, detail="Erro ao obter taxa de câmbio da API.")
+        raise HTTPException(status_code=400, detail='Probably invalid currencies given')
+    
+    return float(data["Realtime Currency Exchange Rate"]["5. Exchange Rate"])
 
-    try:
-        exchange_rate = float(data["Realtime Currency Exchange Rate"]["5. Exchange Rate"])
-    except (KeyError, ValueError) as error:
-        raise HTTPException(status_code=500, detail=f"Erro ao processar taxa de câmbio: {error}")
-
-    return price * exchange_rate
-
-    #----------VERSÃO ASSINCRONA-----------
 
 async def async_converter(from_currency: str, to_currency: str, price: float):
-    url = (
-        f'https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE'
-        f'&from_currency={from_currency}&to_currency={to_currency}&apikey={ALPHAVANTAGE_API_KEY}'
-    )
-
+    
+    url = f'https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency={from_currency}&to_currency={to_currency}&apikey=UB83QBMYTDJYS3NF'
+    print(url)
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url=url) as response:
-                if response.status != 200:
-                    raise HTTPException(status_code=400, detail=f"Erro HTTP: {response.status}")
                 data = await response.json()
-                print(data)
 
     except Exception as error:
-        raise HTTPException(status_code=400, detail=f"Erro ao fazer requisição: {error}")
-
+        raise HTTPException(status_code=500, detail=f'Internal error on alpha vantange requests: {error}')
+    
     if "Realtime Currency Exchange Rate" not in data:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Erro ao obter taxa de câmbio da API. - {data}")
+        raise HTTPException(status_code=400, detail='Probably invalid currencies given') 
 
-    try:
-            exchange_rate = float(data["Realtime Currency Exchange Rate"]["5. Exchange Rate"])
-    except (KeyError, ValueError) as error:
-        raise HTTPException(status_code=500, detail=f"Erro ao processar taxa de câmbio: {error}")
+    result = {
+        to_currency: float(data["Realtime Currency Exchange Rate"]["5. Exchange Rate"]) * price
+    }
 
-    return {to_currency: price * exchange_rate}
+    return result
+
+# if __name__ == '__main__':
+#     import asyncio
+#     result = asyncio.run(async_converter('USD', 'BRL', 1.0))
+#     print(f'result {result}')
